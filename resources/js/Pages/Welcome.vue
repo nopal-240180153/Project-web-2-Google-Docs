@@ -64,7 +64,7 @@ const hasUser = computed(() => {
 
                 <main class="mt-6 flex flex-col items-center justify-center text-center py-20">
                     <h1 class="text-4xl font-extrabold text-gray-900 dark:text-white sm:text-5xl">
-                        Web Editor Kolaboratif Real-Time
+                        Project Mata Kuliah Pemograman Web 2 
                     </h1>
                     <p class="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-xl">
                         Buat dokumen, bagikan link ke rekan tim, dan ketik bersama secara instan.

@@ -8,8 +8,14 @@ use Illuminate\Support\Facades\Broadcast;
 |--------------------------------------------------------------------------
 */
 
-// Kita buat channel room ini mengembalikan nilai true (selalu diizinkan masuk)
-// tanpa peduli apakah user sudah login atau belum (anonim/HP)
-Broadcast::channel('document-room.{id}', function () {
-    return true; 
+// Membuka gerbang autentikasi untuk Presence Channel dokumen
+Broadcast::channel('document.{documentId}', function ($user, $documentId) {
+    if ($user) {
+        // Presence channel wajib mengembalikan array berisi info data user
+        return [
+            'id' => $user->id,
+            'name' => $user->name
+        ];
+    }
+    return false;
 });
