@@ -1,12 +1,11 @@
 <?php
 
-use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\ProfileController;
-use Illuminate\Foundation\Application;
+use App\Http\Controllers\DocumentController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Foundation\Application;
 use Inertia\Inertia;
 
-// Rute halaman depan (bawaan Laravel)
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
@@ -16,23 +15,20 @@ Route::get('/', function () {
     ]);
 });
 
-// Rute Dashboard bawaan Breeze (Bisa dibiarkan atau diubah)
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
-
-// KUNCI JAWABANNYA DI SINI: Bungkus rute editor ke dalam middleware auth
-Route::middleware('auth')->group(function () {
-    // Jalur untuk menampilkan halaman editor
-    Route::get('/editor', [DocumentController::class, 'edit'])->name('editor.edit');
+// 1. HARUS LOGIN (Dashboard, Tambah Dokumen, & Profile)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/dashboard', [DocumentController::class, 'index'])->name('dashboard');
+    Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');
     
-    // Jalur untuk memproses auto-save dari editor
-    Route::post('/editor/save', [DocumentController::class, 'save'])->name('editor.save');
-    
-    // Rute profile bawaan Breeze
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+// 2. BISA DIAKSES TAMU / TANPA LOGIN
+Route::get('/editor/{id}', [DocumentController::class, 'show'])->name('editor.show');
+
+// 3. HANYA USER LOGIN YANG BISA SAVE DOKUMEN
+Route::middleware(['auth'])->put('/documents/{id}', [DocumentController::class, 'update'])->name('documents.update');
 
 require __DIR__.'/auth.php';

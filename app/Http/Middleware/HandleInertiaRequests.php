@@ -29,11 +29,15 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        return [
-            ...parent::share($request),
+        return array_merge(parent::share($request), [
+            // KUNCI PERBAIKAN: Membagikan data autentikasi ke Vue
             'auth' => [
                 'user' => $request->user(),
             ],
-        ];
+            // Jika Anda menggunakan flash messages (opsional, bawaan Laravel Breeze)
+            'flash' => [
+                'message' => $request->session()->get('message'),
+            ],
+        ]);
     }
 }

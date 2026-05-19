@@ -33,6 +33,20 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        // Jika login dari halaman lain, kembalikan ke tujuan itu
+        $redirectTo = $request->query('redirect');
+
+        if ($redirectTo) {
+            // Pastikan redirectTo tidak mengarah ke path kosong/invalid.
+            // Jika value berupa relative path, redirect()->to() tetap aman.
+            $redirectTo = is_string($redirectTo) ? trim($redirectTo) : null;
+            if ($redirectTo) {
+                return redirect()->to($redirectTo);
+            }
+        }
+
+
+        // Default: diarahkan ke dashboard
         return redirect()->intended(route('dashboard', absolute: false));
     }
 
@@ -47,6 +61,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerateToken();
 
+        // Setelah logout diarahkan kembali ke halaman welcome depan
         return redirect('/');
     }
 }

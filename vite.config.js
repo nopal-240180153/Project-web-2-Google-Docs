@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
-import vue from '@vitejs/plugin-vue';
+import vue from '@vitejs/plugin-vue'; // gunakan paket resmi @vitejs/plugin-vue
 
 export default defineConfig({
     plugins: [
@@ -17,4 +17,12 @@ export default defineConfig({
             },
         }),
     ],
+    // === TAMBAHKAN BLOK SERVER INI UNTUK MENYEMBUHKAN EROR CORS VIA IP ===
+    server: {
+        host: '0.0.0.0',
+        cors: true,
+        hmr: {
+            host: '192.168.1.6', // Sesuaikan dengan IP laptopmu yang ada di gambar console
+        },
+    },
 });

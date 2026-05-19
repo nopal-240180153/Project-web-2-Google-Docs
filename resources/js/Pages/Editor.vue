@@ -1,136 +1,150 @@
-<template>
-  <div class="editor-container">
-    <div class="editor-header">
-      <h2>DOCS Sharing</h2>
-      <span class="status-text" :class="{ 'text-saving': isSaving }">
-        {{ statusMessage }}
-      </span>
-    </div>
-
-    <div class="editor-body">
-      <div ref="editorElement"></div>
-    </div>
-  </div>
-</template>
-
 <script setup>
-import { onMounted, onBeforeUnmount, ref } from 'vue';
-import axios from 'axios';
+import { onMounted, ref, nextTick } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import Quill from 'quill';
-import 'quill/dist/quill.snow.css'; // Ambil style css toolbar bawaan quill
+import 'quill/dist/quill.snow.css';
 
-// Menangkap data lembar kerja lama dari database Laravel
-
-const props = defineProps({
-  document: Object
+// Tangkap props dari Controller Laravel
+const { document, isLoggedIn } = defineProps({
+    document: Object,
+    isLoggedIn: Boolean
 });
 
-const editorElement = ref(null);
-let quillInstance = null;
-const isSaving = ref(false);
-const statusMessage = ref('Semua perubahan tersimpan');
+const editorRef = ref(null);
+let quill = null;
 let saveTimeout = null;
+const saveStatus = ref('');
+const isSaving = ref(false);
 
-onMounted(() => {
-  // Inisialisasi Quill Editor dengan toolbar standar Google Docs
-  quillInstance = new Quill(editorElement.value, {
-    theme: 'snow',
-    placeholder: 'Ketik di sini...',
-    modules: {
-      toolbar: [
-        [{ 'header': [1, 2, false] }],
-        ['bold', 'italic', 'underline', 'strike'],
-        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-        ['clean']
-      ]
-    }
-  });
+// Fungsi menyalin link rute ke clipboard HP/Laptop orang lain
+const copyShareLink = () => {
+    // Gunakan route() helper untuk generate URL berdasarkan APP_URL
+    const shareUrl = route('editor.show', document.id, true);
+    navigator.clipboard.writeText(shareUrl);
+    alert('Link kolaborasi berhasil disalin! Kirimkan ke temanmu:\n' + shareUrl);
+};
 
-  // Jika di database sudah ada isinya, tampilkan langsung di dalam editor
-  if (props.document && props.document.content) {
-    quillInstance.root.innerHTML = props.document.content;
-  }
+// Fungsi untuk menyimpan konten dokumen ke database
+const saveDocument = async () => {
+    if (!isLoggedIn || !quill) return;
 
-  // Logika Auto-Save otomatis 2 detik setelah user berhenti mengetik
-  quillInstance.on('text-change', () => {
-    statusMessage.value = 'Sedang mengetik...';
     isSaving.value = true;
+    saveStatus.value = 'Menyimpan...';
 
-    clearTimeout(saveTimeout);
+    try {
+        // Ambil CSRF token dari meta tag HTML
+        const csrfToken = window.document.querySelector('meta[name="csrf-token"]')?.content;
+        
+        const response = await fetch(`/documents/${document.id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify({
+                content: quill.root.innerHTML,
+            }),
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            saveStatus.value = '✓ Tersimpan';
+            isSaving.value = false;
+
+            // Hapus pesan "Tersimpan" setelah 2 detik
+            setTimeout(() => {
+                saveStatus.value = '';
+            }, 2000);
+        } else {
+            saveStatus.value = '✗ Gagal menyimpan';
+            isSaving.value = false;
+        }
+    } catch (error) {
+        console.error('Error saving document:', error);
+        saveStatus.value = '✗ Error: ' + error.message;
+        isSaving.value = false;
+    }
+};
+
+// Fungsi debounce untuk menghindari save terlalu sering
+const debounceAutoSave = () => {
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+    }
 
     saveTimeout = setTimeout(() => {
-      statusMessage.value = 'Menyimpan ke database...';
-      const htmlContent = quillInstance.root.innerHTML;
+        saveDocument();
+    }, 1500); // Save setiap 1.5 detik setelah user berhenti mengetik
+};
 
-      // Kirim data konten text editor ke route Laravel via Axios
-      axios.post('/editor/save', { content: htmlContent })
-        .then(response => {
-          statusMessage.value = 'Semua perubahan tersimpan';
-          isSaving.value = false;
-        })
-        .catch(error => {
-          statusMessage.value = 'Gagal menyimpan data otomatis!';
-          isSaving.value = false;
-          console.error(error);
+onMounted(async () => {
+    await nextTick();
+    if (editorRef.value) {
+        // Inisialisasi Quill Editor dengan pengaman login
+        quill = new Quill(editorRef.value, {
+            theme: 'snow',
+            readOnly: !isLoggedIn, // JIKA BELUM LOGIN, EDITOR DIKUNCI (READ-ONLY)
+            modules: {
+                toolbar: isLoggedIn ? true : false // JIKA BELUM LOGIN, TOOLBAR DIHILANGKAN
+            }
         });
-    }, 2000);
-  });
-});
 
-onBeforeUnmount(() => {
-  clearTimeout(saveTimeout);
+        // Tampilkan isi teks dokumen yang tersimpan di database
+        if (document.content) {
+            quill.root.innerHTML = document.content;
+        }
+
+        // JALANKAN AUTO-SAVE HANYA JIKA USER SUDAH LOGIN
+        if (isLoggedIn) {
+            // Event listener untuk mendeteksi perubahan teks
+            quill.on('text-change', () => {
+                debounceAutoSave();
+            });
+        }
+    }
 });
 </script>
 
-<style scoped>
-.editor-container {
-  max-width: 850px;
-  margin: 40px auto;
-  background: #fff;
-  padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-  font-family: 'Segoe UI', Roboto, sans-serif;
-}
+<template>
+    <div class="min-h-screen bg-gray-50 py-8 px-4">
+        <div class="max-w-4xl mx-auto">
+            
+            <div class="flex justify-between items-center mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">{{ document.title }}</h1>
+                    <p v-if="saveStatus" class="text-sm mt-2" :class="saveStatus.includes('✓') ? 'text-green-600' : 'text-red-600'">
+                        {{ saveStatus }}
+                    </p>
+                </div>
+                
+                <div class="space-x-2">
+                    <button @click="copyShareLink" class="bg-blue-600 text-white px-4 py-2 rounded-md font-medium shadow hover:bg-blue-700 transition">
+                        Bagikan Link
+                    </button>
+                    <Link href="/dashboard" class="bg-gray-500 text-white px-4 py-2 rounded-md font-medium shadow hover:bg-gray-600 transition">
+                        Kembali ke Dashboard
+                    </Link>
+                </div>
+            </div>
 
-.editor-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 2px solid #f5f5f5;
-  padding-bottom: 15px;
-  margin-bottom: 25px;
-}
+            <div v-if="!isLoggedIn" class="bg-amber-50 border-l-4 border-amber-500 text-amber-800 p-4 mb-6 rounded-r-lg shadow-sm flex justify-between items-center animate-pulse">
+                <div>
+                    <h3 class="font-bold text-lg flex items-center">
+                        ⚠️ Mode Hanya Melihat (Read-Only)
+                    </h3>
+                    <p class="text-sm text-amber-700 mt-1">
+                        Kamu tidak bisa mengedit dokumen ini. Silakan login terlebih dahulu untuk membuka akses keyboard dan mulai mengetik bersama.
+                    </p>
+                </div>
+<Link :href="route('login') + `?redirect=${encodeURIComponent('/editor/' + document.id)}`" class="bg-amber-600 text-white px-5 py-2.5 rounded-md font-bold hover:bg-amber-700 transition shadow-md whitespace-nowrap">
+                    Log In Sekarang
+                </Link>
+            </div>
 
-.editor-header h2 {
-  margin: 0;
-  color: #2c3e50;
-  font-size: 22px;
-}
+            <div class="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+                <div ref="editorRef" style="min-height: 450px; font-size: 16px; line-height: 1.6;"></div>
+            </div>
 
-.status-text {
-  font-size: 13px;
-  color: #27ae60;
-  font-weight: 600;
-}
-
-.text-saving {
-  color: #e67e22;
-}
-
-/* Mengatur tinggi area putih tempat mengetik dokumen */
-:deep(.ql-editor) {
-  min-height: 400px;
-  font-size: 16px;
-  line-height: 1.6;
-}
-:deep(.ql-toolbar.ql-snow) {
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-  background: #fafafa;
-}
-:deep(.ql-container.ql-snow) {
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-</style>
+        </div>
+    </div>
+</template>

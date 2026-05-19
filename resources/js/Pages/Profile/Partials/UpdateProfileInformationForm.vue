@@ -14,30 +14,27 @@ defineProps({
     },
 });
 
-const user = usePage().props.auth.user;
+// Menggunakan tanda ?. (optional chaining) agar tidak crash jika 'auth' belum di-share oleh Laravel
+const pageProps = usePage().props;
+const user = pageProps.auth?.user || pageProps.user || {};
 
+// Mengisi form, jika data user kosong maka akan default ke string kosong ''
 const form = useForm({
-    name: user.name,
-    email: user.email,
+    name: user?.name || '',
+    email: user?.email || '',
 });
 </script>
 
 <template>
     <section>
         <header>
-            <h2 class="text-lg font-medium text-gray-900">
-                Profile Information
-            </h2>
-
+            <h2 class="text-lg font-medium text-gray-900">Profile Information</h2>
             <p class="mt-1 text-sm text-gray-600">
                 Update your account's profile information and email address.
             </p>
         </header>
 
-        <form
-            @submit.prevent="form.patch(route('profile.update'))"
-            class="mt-6 space-y-6"
-        >
+        <form @submit.prevent="form.patch(route('profile.update'))" class="mt-6 space-y-6">
             <div>
                 <InputLabel for="name" value="Name" />
 
@@ -69,7 +66,7 @@ const form = useForm({
                 <InputError class="mt-2" :message="form.errors.email" />
             </div>
 
-            <div v-if="mustVerifyEmail && user.email_verified_at === null">
+            <div v-if="mustVerifyEmail && user?.email_verified_at === null">
                 <p class="mt-2 text-sm text-gray-800">
                     Your email address is unverified.
                     <Link
@@ -99,12 +96,7 @@ const form = useForm({
                     leave-active-class="transition ease-in-out"
                     leave-to-class="opacity-0"
                 >
-                    <p
-                        v-if="form.recentlySuccessful"
-                        class="text-sm text-gray-600"
-                    >
-                        Saved.
-                    </p>
+                    <p v-if="form.recentlySuccessful" class="text-sm text-gray-600">Saved.</p>
                 </Transition>
             </div>
         </form>

@@ -8,48 +8,69 @@ use Inertia\Inertia;
 
 class DocumentController extends Controller
 {
-    public function edit()
+    // Menampilkan halaman depan / welcome jika user belum login
+    public function welcome()
     {
-        // JIKA sedang login pakai ID user, JIKA belum (testing) paksa pakai ID 1
-        $userId = auth()->check() ? auth()->id() : 1;
-
-        $document = Document::firstWhere('user_id', $userId);
-
-        return Inertia::render('Editor', [
-            'document' => $document,
+        return Inertia::render('Welcome', [
+            'canLogin' => Route::has('login'),
+            'canRegister' => Route::has('register'),
         ]);
     }
 
-    public function save(Request $request)
+    // Menampilkan daftar dokumen di Dashboard resmi
+    public function index()
     {
-        // 1. Ambil konten teks dari editor
-        $content = $request->input('content');
+        return Inertia::render('Dashboard', [
+            'documents' => Document::where('user_id', auth()->id())->latest()->get()
+        ]);
+    }
 
-        try {
-            // JIKA sedang login pakai ID user, JIKA belum (testing) paksa pakai ID 1
-            $userId = auth()->check() ? auth()->id() : 1;
+    // Membuat dokumen baru dari Dashboard
+    public function store(Request $request)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255',
+        ]);
 
-            $document = Document::firstOrNew([
-                'user_id' => $userId,
-            ]);
+        $document = Document::create([
+            'title' => $request->title,
+            'content' => '',
+            'user_id' => auth()->id(), 
+        ]);
 
-            if (! $document->exists) {
-                $document->title = 'Untitled Document';
-            }
+        return redirect()->route('editor.show', $document->id);
+    }
 
-            $document->content = $content;
-            $document->save();
+    // Membuka halaman editor (Bisa diakses Tamu & User Login)
+    public function show($id)
+    {
+        $document = Document::findOrFail($id);
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Data sukses disimpan!'
-            ], 200);
+        return Inertia::render('Editor', [
+            'document' => $document,
+            'isLoggedIn' => auth()->check(), 
+        ]);
+    }
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ], 400); 
-        }
+    // Menyimpan konten dokumen saat user mengetik (Auto-save)
+    public function update(Request $request, $id)
+    {
+        $document = Document::findOrFail($id);
+
+        // Validasi konten
+        $request->validate([
+            'content' => 'nullable|string',
+        ]);
+
+        // Update konten dokumen
+        $document->update([
+            'content' => $request->content ?? ''
+        ]);
+
+        return response()->json([
+            'status' => 'Tersimpan',
+            'message' => 'Dokumen berhasil disimpan',
+            'saved_at' => $document->updated_at,
+        ]);
     }
 }

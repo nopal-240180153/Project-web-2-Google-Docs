@@ -10,5 +10,5 @@ class Document extends Model
     use HasFactory;
 
     // Tambahkan baris ini untuk membuka gembok keamanan database Laravel
-    protected $fillable = ['user_id', 'content'];
+    protected $fillable = ['user_id', 'title', 'content'];
 }
