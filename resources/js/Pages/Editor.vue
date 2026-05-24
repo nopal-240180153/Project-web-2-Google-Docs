@@ -20,10 +20,14 @@ const saveMessage = ref('');
 const typingUser = ref(''); 
 let typingTimeout = null;
 
+// KUNCI UTAMA: State untuk menyimpan koordinat kursor user lain
+const activeCursors = ref({});
+
 onMounted(() => {
     if (window.Echo) {
-        Echo.join(`document.${props.document.id}`)
-            .here((users) => {
+        const channel = Echo.join(`document.${props.document.id}`);
+
+        channel.here((users) => {
                 activeUsers.value = users.filter(u => u.id !== currentUser.id);
             })
             .joining((user) => {
@@ -36,9 +40,10 @@ onMounted(() => {
                 if (typingUser.value === user.name) {
                     typingUser.value = '';
                 }
+                // Hapus kursor jika user tersebut keluar dari halaman editor
+                delete activeCursors.value[user.id];
             })
             .listenForWhisper('typing', (e) => {
-                // Menerima bisikan jika user lain sedang mengetik
                 typingUser.value = e.name;
 
                 clearTimeout(typingTimeout);
@@ -46,21 +51,46 @@ onMounted(() => {
                     typingUser.value = '';
                 }, 2000);
             })
-            // KUNCI UTAMA: Mendengarkan siaran teks baru yang disimpan oleh user lain
+            // FITUR BARU: Menerima bisikan koordinat kursor dari user lain
+            .listenForWhisper('mouse-move', (e) => {
+                activeCursors.value[e.userId] = {
+                    name: e.userName,
+                    x: e.x,
+                    y: e.y,
+                    color: e.color
+                };
+            })
             .listen('DocumentUpdated', (e) => {
-                // Update isi text editor secara instan tanpa perlu refresh!
                 textContent.value = e.content; 
             });
     }
 });
 
-// Fungsi memicu bisikan nama kamu ke user lain saat kamu menekan keyboard
+// Fungsi memicu bisikan mengetik saat menekan keyboard
 const handleKeyDownWhisper = () => {
     if (window.Echo) {
         Echo.join(`document.${props.document.id}`)
             .whisper('typing', {
                 id: currentUser.id,
                 name: currentUser.name
+            });
+    }
+};
+
+// FITUR BARU: Fungsi untuk menangkap gerakan mouse kita lalu disiarkan ke kolaborator lain
+const handleMouseMove = (event) => {
+    if (window.Echo) {
+        // Ambil warna kursor unik secara otomatis berdasarkan ID user agar tidak tertukar
+        const colors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
+        const userColor = colors[currentUser.id % colors.length];
+
+        Echo.join(`document.${props.document.id}`)
+            .whisper('mouse-move', {
+                userId: currentUser.id,
+                userName: currentUser.name,
+                x: event.clientX,
+                y: event.clientY,
+                color: userColor
             });
     }
 };
@@ -134,8 +164,8 @@ onUnmounted(() => {
             </div>
         </template>
 
-        <div class="py-12">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div class="py-12" @mousemove="handleMouseMove">
+            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8 relative">
                 <div class="relative bg-white p-6 shadow-sm sm:rounded-lg border border-gray-200">
                     
                     <textarea
@@ -159,5 +189,27 @@ onUnmounted(() => {
                 </div>
             </div>
         </div>
+
+        <template v-for="(cursor, id) in activeCursors" :key="id">
+            <div 
+                class="fixed pointer-events-none z-50 transition-all duration-75 ease-out"
+                :style="{ left: `${cursor.x}px`, top: `${cursor.y}px` }"
+            >
+                <svg 
+                    class="h-5 w-5 drop-shadow-md" 
+                    viewBox="0 0 24 24" 
+                    :style="{ fill: cursor.color, stroke: '#ffffff', strokeWidth: '1.5px' }"
+                >
+                    <path d="M4.28 2.33a.5.5 0 0 0-.74.61l6.4 18.52a.5.5 0 0 0 .91-.12l2.36-7.38 7.38-2.36a.5.5 0 0 0 .12-.91L4.28 2.33Z" />
+                </svg>
+
+                <div 
+                    class="ml-3 px-2 py-0.5 rounded text-xs font-semibold text-white whitespace-nowrap shadow-md"
+                    :style="{ backgroundColor: cursor.color }"
+                >
+                    {{ cursor.name }}
+                </div>
+            </div>
+        </template>
     </AuthenticatedLayout>
 </template>
